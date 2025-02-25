@@ -1,17 +1,17 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import tempfile
 import os
-from langchain_openai import AzureOpenAIEmbeddings
-from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.prompts import ChatPromptTemplate
 from typing import Any
 import logging
+import torch
 from dotenv import load_dotenv, find_dotenv
 
 # Import the necessary functions from utils.py
-from utils import process_pdf, send_to_qdrant, qdrant_client, qa_ret, get_callback_handler, get_embedding_model
+from utils import process_pdf, send_to_qdrant, qdrant_client, qa_ret, get_callback_handler, get_embedding_model, process_pdf_with_tables
 
 
 # Configure logging
@@ -19,7 +19,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger  = logging.getLogger('backend')
 
 app = FastAPI()
-
+os.makedirs("output/images", exist_ok=True)
+app.mount("/images", StaticFiles(directory="output/images"), name="images")
 # Keep tracks of user specific variables, set in login function
 session = {} # CHANGED TO SE flask_session instead, extention to handle server side sessions
 # Hold agents for users,
@@ -45,9 +46,6 @@ app.add_middleware(
 
 class QuestionRequest(BaseModel):
     question: str
-    username: str
-    country: str
-    role: str
 
 
 
@@ -68,19 +66,20 @@ async def upload_pdf(file: UploadFile = File(...)):
     try:
         # Save uploaded file to a temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            
             temp_file.write(file.file.read())
             temp_file_path = temp_file.name
-
+            
+        
         # Process the PDF to get document chunks and embeddings
-        document_chunks = process_pdf(temp_file_path)
+        document_chunks, images = process_pdf_with_tables(temp_file_path)
 
-        # Get the embedding model           
+        # Get the embedding model for text chunks          
         embedding_model = get_embedding_model()
-
-
+        
         # Send the document chunks (with embeddings) to Qdrant
-        success = send_to_qdrant(document_chunks, embedding_model)
-
+        success = send_to_qdrant(document_chunks, images, embedding_model)
+        
         # Remove the temporary file after processing
         os.remove(temp_file_path)
 
@@ -99,15 +98,16 @@ async def ask_question(question_request: QuestionRequest):
     Endpoint to ask a question and retrieve a response from the stored document content.
     """
     try:
+       
         # Retrieve the Qdrant vector store (assuming qdrant_client() gives you access to it)
         qdrant_store = qdrant_client()
-
+        
         # Get the question from the request body
         question = question_request.question
 
         # Use the question-answer retrieval function to get the response
         response = qa_ret(qdrant_store, question)
-
+        print(f"{response}\n")
         return {"answer": response}
 
     except Exception as e:
@@ -155,4 +155,4 @@ async def ask_question_2(data: QuestionRequest = Body(None)):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve answer: {str(e)}")
-
+    
