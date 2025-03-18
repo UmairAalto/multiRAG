@@ -1,0 +1,8 @@
+__pycache__/
+.git
+.gitignore
+Data/
+Notebook/
+README.md
+output/
+venv/

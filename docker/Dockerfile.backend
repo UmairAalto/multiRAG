@@ -1,0 +1,121 @@
+# Stage 1: Setup and dependency installation
+FROM ubuntu:22.04 AS builder
+
+WORKDIR /code
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install base packages and Python
+RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    wget git libgl1 libglib2.0-0 ccache\
+    && rm -rf /var/lib/apt/lists/*
+
+RUN add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y python3.10 python3.10-venv python3.10-distutils python3-pip
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+# Create and activate virtual environment
+RUN python3 -m venv /opt/mineru_venv && \
+    /bin/bash -c "source /opt/mineru_venv/bin/activate && pip install --upgrade pip"
+
+COPY requirements.txt .
+RUN /bin/bash -c "source /opt/mineru_venv/bin/activate && pip install -r requirements.txt --extra-index-url https://wheels.myhloli.com"
+
+# Stage 2: Download configuration template and install magic-pdf
+RUN /bin/bash -c "wget https://github.com/opendatalab/MinerU/raw/master/magic-pdf.template.json && \
+    cp magic-pdf.template.json /root/magic-pdf.json && \
+    source /opt/mineru_venv/bin/activate && pip install -U magic-pdf"
+
+# Stage 3: Download models and update configuration file
+
+COPY download_models.py .
+RUN /bin/bash -c "pip install huggingface_hub && \
+    python3 download_models.py"
+
+# Final Stage: Assemble the production image
+FROM ubuntu:22.04
+WORKDIR /code
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install only runtime dependencies if needed (or copy them from builder)
+RUN apt-get update && apt-get install -y \
+    libgl1 libglib2.0-0 python3.10 python3.10-venv ccache && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy necessary artifacts from the builder stages
+COPY --from=builder /opt/mineru_venv /opt/mineru_venv
+COPY --from=builder /root/magic-pdf.json /root/magic-pdf.json
+COPY --from=builder /root/.cache/huggingface/hub /root/.cache/huggingface/hub
+COPY . .
+
+EXPOSE 8000
+ENTRYPOINT ["/bin/bash", "-c", "source /opt/mineru_venv/bin/activate && exec \"$@\"", "--"]
+CMD ["gunicorn", "app:app"]
+
+
+
+
+
+# Use the official Ubuntu base image
+#FROM ubuntu:22.04
+
+#WORKDIR /code
+
+# Set environment variables to non-interactive to avoid prompts during installation
+#ENV DEBIAN_FRONTEND=noninteractive
+
+# Update the package list and install necessary packages
+#RUN apt-get update && \
+#    apt-get install -y \
+#        software-properties-common && \
+#    add-apt-repository ppa:deadsnakes/ppa && \
+#    apt-get update && \
+#    apt-get install -y \
+#        python3.10 \
+#        python3.10-venv \
+#        python3.10-distutils \
+#        python3-pip \
+#        wget \
+#        git \
+#        libgl1 \
+#        libglib2.0-0 \
+#        && rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.10 as the default python3
+#RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+# Create a virtual environment for MinerU
+#RUN python3 -m venv /opt/mineru_venv
+
+# Activate the virtual environment
+#RUN /bin/bash -c "source /opt/mineru_venv/bin/activate && \
+#    pip3 install --upgrade pip"
+
+
+#COPY requirements.txt .
+
+# Install necessary packages
+#RUN /bin/bash -c "source /opt/mineru_venv/bin/activate && \
+#    pip3 install -r requirements.txt --extra-index-url https://wheels.myhloli.com"
+
+# Copy the configuration file template and install magic-pdf latest
+#RUN /bin/bash -c "wget https://github.com/opendatalab/MinerU/raw/master/magic-pdf.template.json && \
+#    cp magic-pdf.template.json /root/magic-pdf.json && \
+#    source /opt/mineru_venv/bin/activate && \
+#    pip3 install -U magic-pdf"
+
+# Download models and update the configuration file
+#RUN /bin/bash -c "pip3 install huggingface_hub && \
+#    wget https://github.com/opendatalab/MinerU/raw/master/scripts/download_models_hf.py -O download_models.py && \
+#    python3 download_models.py && \
+#    sed -i 's|cpu|cuda|g' /root/magic-pdf.json"
+
+#COPY . .
+
+#EXPOSE 8000
+
+#ENTRYPOINT ["/bin/bash", "-c", "source /opt/mineru_venv/bin/activate && exec \"$@\"", "--"]
+
+#CMD ["gunicorn", "app:app", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
