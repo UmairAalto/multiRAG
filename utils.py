@@ -188,45 +188,42 @@ def get_images(md_contents, local_dir, img_embedding_model):
     return images
 
 
-def process_pdf_with_tables(pdf_path, img_embedding_model):
-    # args
-    pdf_file_name = pdf_path  # replace with the real pdf path
-    
-    # prepare env
-    local_image_dir, local_md_dir = "output/images", "output"
-    image_dir = str(os.path.basename(local_image_dir))
+def process_pdf_with_tables(pdf_path, filename):
+    try:
+        # prepare env
+        local_image_dir, local_dir = f"output/{filename}_images", "output"
+        image_dir = str(os.path.basename(local_image_dir))
 
-    os.makedirs(local_image_dir, exist_ok=True)
+        os.makedirs(local_image_dir, exist_ok=True)
 
-    image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(
-        local_md_dir
-    )
+        image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(
+            local_dir
+        )
 
-    # read bytes
-    reader1 = FileBasedDataReader("")
-    pdf_bytes = reader1.read(pdf_file_name)  # read the pdf content
+        # read bytes
+        reader1 = FileBasedDataReader("")
+        pdf_bytes = reader1.read(pdf_path)  # read the pdf content
 
-    # proc
-    ## Create Dataset Instance
-    ds = PymuDocDataset(pdf_bytes)
+        # proc
+        ## Create Dataset Instance
+        ds = PymuDocDataset(pdf_bytes)
 
-    ## inference
+        ## inference
 
-    infer_result = ds.apply(doc_analyze, ocr=True)
+        infer_result = ds.apply(doc_analyze, ocr=True)
 
-    ## pipeline
-    pipe_result = infer_result.pipe_ocr_mode(image_writer)
+        ## pipeline
+        pipe_result = infer_result.pipe_ocr_mode(image_writer)
 
-    ### get content list content
-    content_list_content = pipe_result.get_content_list(image_dir)
+        ### dump content list content into local directory
+        pipe_result.draw_layout(os.path.join(local_dir, f"{filename}_layout.pdf"))
 
-    pages = combine_page_contents(content_list_content)
-
-    chunks = chunk_pages(pages, 1000, 200) # Adjust as needed
-
-    images = get_images(content_list_content, f"{local_md_dir}/", img_embedding_model)
-
-    return chunks, images
+        pipe_result.dump_content_list(md_writer, f"{filename}_content_list.json", image_dir)
+        
+        return True
+    except Exception as ex:
+        print(f"Failed to extract pdf: {str(ex)}")
+        return False
 
 # Function to send document chunks (with embeddings) to the Qdrant vector database
 def send_to_qdrant(filename, documents, images, txt_embedding_model):
@@ -313,7 +310,7 @@ def qa_ret(text_store, image_store, input_query):
         
         txt_retriever = text_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
         img_retriever = image_store.as_retriever(
-            search_type="similarity", search_kwargs={"k": 4, "score_threshold": 0.8}
+            search_type="similarity", search_kwargs={"k": 4, "score_threshold": 0.55}
         )
 
         messages = [

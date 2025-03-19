@@ -9,9 +9,10 @@ import logging
 import torch
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv, find_dotenv
+import json
 
 # Import the necessary functions from utils.py
-from utils import process_pdf, send_to_qdrant, qdrant_client, qa_ret, get_callback_handler, get_embedding_models, process_pdf_with_tables
+from utils import process_pdf, send_to_qdrant, qdrant_client, qa_ret, combine_page_contents, get_embedding_models, process_pdf_with_tables, chunk_pages, get_images
 
 
 # Configure logging
@@ -54,6 +55,9 @@ app.add_middleware(
 class QuestionRequest(BaseModel):
     question: str
 
+class SendFilesRequest(BaseModel):
+    filename: str
+
 
 # Define a prompt for the API
 class RAGChatPromptTemplate(ChatPromptTemplate):
@@ -67,24 +71,18 @@ class RAGChatPromptTemplate(ChatPromptTemplate):
 @app.post("/upload-pdf/")
 async def upload_pdf(file: UploadFile = File(...)):
     """
-    Endpoint to upload a PDF file, process it, and store in the vector DB.
+    Endpoint to upload a PDF file, extract data and save it.
     """
     try:
         # Save uploaded file to a temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            filename = file.filename.split(".")[0]
+            filename = file.filename[:-4]
             temp_file.write(file.file.read())
             temp_file_path = temp_file.name
             
         
         # Process the PDF to get document chunks and embeddings
-        document_chunks, images = process_pdf_with_tables(temp_file_path, app.state.embedding_models["clip"])
-
-        # Get the embedding model for text chunks
-        #embedding_model = get_embedding_models()
-        
-        # Send the document chunks (with embeddings) to Qdrant
-        success = send_to_qdrant(filename, document_chunks, images, app.state.embedding_models["txt"])
+        success = process_pdf_with_tables(temp_file_path, filename)
         
         # Remove the temporary file after processing
         os.remove(temp_file_path)
@@ -96,6 +94,39 @@ async def upload_pdf(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
+    
+@app.post("/send-to-qdrant/")
+async def upload_to_qdrant(file: SendFilesRequest):
+    """
+    Endpoint to load the saved contents from PDF file, process the contents and send them to Qdrant.
+    """
+    filename = file.filename
+    output_dir = "output"
+    images_dir = f"output/{filename}_images"
+    if not os.path.exists(output_dir):
+        raise HTTPException(status_code=404, detail=f"Documents file not found: {output_dir}")
+    if not os.path.exists(images_dir):
+        raise HTTPException(status_code=404, detail=f"Images file not found: {images_dir}")
+
+    try:
+        with open(f"output/{filename}_content_list.json", "r", encoding="utf-8") as json_list:
+            file_contents = json.load(json_list)
+        
+        pages = combine_page_contents(file_contents)
+
+        chunks = chunk_pages(pages, 1000, 200) # Adjust as needed
+
+        images = get_images(file_contents, f"{output_dir}/", app.state.embedding_models["clip"])
+        # Send the loaded document chunks and images to Qdrant.
+        success = send_to_qdrant(filename, chunks, images, app.state.embedding_models["txt"])
+
+        if success:
+            return {"message": "File contents were uploaded to Qdrant successfully."}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to upload file contents to Qdrant.")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing files: {str(e)}")
 
 # Endpoint to ask a question and retrieve the answer from the vector DB
 @app.post("/ask-question/")
