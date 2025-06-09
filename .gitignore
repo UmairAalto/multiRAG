@@ -22,4 +22,5 @@ st_app.py
 /Notebook
 /output
 /Data
-
+/qdrant_storage
+/MinerU

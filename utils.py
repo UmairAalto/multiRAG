@@ -1,14 +1,12 @@
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_qdrant import QdrantVectorStore
 from langchain_openai import AzureOpenAIEmbeddings
 from qdrant_client import QdrantClient, models
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
-from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.output_parsers import StrOutputParser
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, AzureChatOpenAI
 import logging
 import os
 from dotenv import load_dotenv
@@ -130,10 +128,8 @@ def combine_page_contents(contents):
             # Join the table caption (if available) and the table body.
             caption = "".join(item.get("table_caption", [])).strip()
             table_body = item.get("table_body", "").strip()
-            table_footnote = "".join(item.get("table_footnote", [])).strip()
             # Combine caption and table body with proper spacing/newlines.
-            combined = f"{caption}   \n{table_body} \n{table_footnote}"
-            
+            combined = f"{caption}   \n{table_body}"
 
         elif item["type"] == "image":
             # Format image using markdown and append its caption.
@@ -179,14 +175,14 @@ def get_images(md_contents, local_dir, img_embedding_model):
                 
                 if item.get("img_caption"):
                     caption = item["img_caption"][0]
-                    txt_embd = img_embedding_model.embed_query(item["img_caption"][0])
-                    embd = combine_vectors_avg(img_embd[0], txt_embd)
+                    #txt_embd = img_embedding_model.embed_query(item["img_caption"][0])
+                    #embd = combine_vectors_avg(img_embd[0], txt_embd)
                 else:
                     caption = "This figure doesn't have a caption"
-                    embd = img_embd[0]
+                    #embd = img_embd[0]
 
                 images.append({"base64": base64_str, 
-                            "img_embeddings": embd,
+                            "img_embeddings": img_embd[0],
                             "page_num": item["page_idx"] + 1,
                             "image_caption": caption})
     return images
@@ -230,12 +226,11 @@ def process_pdf_with_tables(pdf_path, filename):
         return False
 
 # Function to send document chunks (with embeddings) to the Qdrant vector database
-def send_to_qdrant(filename, documents, images, txt_embedding_model):
+def send_to_qdrant(filename, documents, images, txt_embedding_model, collection="All"):
     """Send the document chunks to the Qdrant vector database."""
     try:
         
         client = QdrantClient(url=QDRANT_URL)
-        collection = "RAG_chat" # Replace with your collection name
 
         if not client.collection_exists(collection_name=collection):
             client.create_collection(
@@ -284,12 +279,11 @@ def send_to_qdrant(filename, documents, images, txt_embedding_model):
         return False
     
 # Function to initialize the Qdrant client and return the vector store object
-def qdrant_client(txt_embedding_model, image_embedding_model):
+def qdrant_client(txt_embedding_model, image_embedding_model, collection="All"):
     """Initialize Qdrant client and return the vector store."""
     
     qdrant_client = QdrantClient(url=QDRANT_URL)
     
-    collection = "RAG_chat"
     txt_qdrant_store = QdrantVectorStore(
         client=qdrant_client,
         collection_name=collection,
@@ -304,27 +298,26 @@ def qdrant_client(txt_embedding_model, image_embedding_model):
     )
     
     return txt_qdrant_store, img_qdrant_store
-            
+
 
 # Function to handle question answering using the Qdrant vector store and GPT
-def qa_ret(text_store, image_store, input_query):
+def qa_ret(text_store, image_store, input_query, k=4):
     """Retrieve relevant documents and generate a response from the AI model."""
     try:
-        #langchain.debug = True
         
-        txt_retriever = text_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+        txt_retriever = text_store.as_retriever(search_type="similarity", search_kwargs={"k": k})
         img_retriever = image_store.as_retriever(
-            search_type="similarity", search_kwargs={"k": 4, "score_threshold": 0.6}
+            search_type="similarity", search_kwargs={"k": 3, "score_threshold": 0.375}
         )
 
         messages = [
             ("system", """Instructions:
-            You are an expert compliance analyst specializing in the maritime industry. Your task is to extract precise answers using the provided Context (text chunks from classification society standards), Images (figures from the standards), and the User’s Question. Your response must be based on a semantic understanding of the content.
+            You are an expert compliance analyst specializing in the maritime industry. Your task is to extract precise answers using the provided Context (text chunks from maritime standards), Images (figures from the standards), and the User’s Question. Your response must be based on a semantic understanding of the content.
             
             **Note:** If the Context references a figure, the corresponding image will be uploaded along with its caption.
              
             **Key Guidelines:**
-            - **Answer Length**: Provide an answer between 40 and 400 words.
+            - **Answer Length**: Provide an answer between 40 and 300 words.
             - **Conciseness & Focus**: Include only the necessary information to directly address the question.
             - **Professional Tone**: Use polite, formal language and avoid any abusive or prohibited expressions.
             - **Semantic Inference**: If exact wording is unavailable, infer the closest meaning using natural language understanding.
@@ -360,7 +353,7 @@ def qa_ret(text_store, image_store, input_query):
 
         setup_and_retrieval = RunnableParallel(
             {"context": txt_retriever, "question": RunnablePassthrough()}
-        )#.with_config({"callbacks": [langfuse_handler]})
+        )
 
         # Get LLM model
         model = get_llm_model()
@@ -386,6 +379,9 @@ def get_callback_handler(username):
         logger.debug(f"Landfuse: getting public key {os.environ['LANGFUSE_PUBLIC_KEY']} and host: {os.environ['LANGFUSE_HOST']}")
         langfuse_handler = CallbackHandler(
             user_id=username,
+            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+            host=os.getenv("LANGFUSE_HOST")
             )
         langfuse_handler.auth_check()
         return langfuse_handler
@@ -403,11 +399,9 @@ def get_embedding_models():
     print("Use Azure OpenAI API")
     # Create the embedding model for Azure OpenAI
     embedding_model = AzureOpenAIEmbeddings(
-        api_version = "2024-02-01",
-        model="text-embedding-3-large",
+        model=os.getenv("EMBEDDING"),
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        default_headers={"Ocp-Apim-Subscription-Key": os.getenv("AZURE_OPENAI_API_KEY")},
-
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     )
 
     clip = OpenCLIPEmbeddings(model_name='ViT-H-14-378-quickgelu', checkpoint='dfn5b')
@@ -418,23 +412,18 @@ def update_base_url(request: Request) -> None:
     if request.url.path == "/chat/completions":
         request.url = request.url.copy_with(path="/v1/openai/deployments/gpt-4o-2024-08-06/chat/completions")
 
+
 # Get llm model
 def get_llm_model():
     api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
     # Create the embedding model for Azure OpenAI
-
-    """model = ChatGoogleGenerativeAI(
-        model="gemini-pro",
+    
+    model = AzureChatOpenAI(
         temperature=0,
-        gemini_api_key=gemini_api_key
-    )"""
-    model = ChatOpenAI(
-        temperature=0,
-        openai_api_key=api_key,
-        base_url="https://aalto-openai-apigw.azure-api.net/",
-        default_headers={"Ocp-Apim-Subscription-Key": api_key},
-        http_client=Client(event_hooks={"request": [update_base_url]})
+        api_key=api_key,
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        azure_deployment=os.getenv("LLM"),
+        api_version="2024-12-01-preview"
     )
 
     return model

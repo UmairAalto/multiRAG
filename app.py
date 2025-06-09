@@ -35,7 +35,8 @@ session = {} # CHANGED TO SE flask_session instead, extention to handle server s
 agents = {}
 
 # Frontend URL
-FRONTEND_URL = os.getenv("FRONTEND_URL") 
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+LANGFUSE_HOST = os.getenv("LANGFUSE_HOST")
 
 # Loading environment variables
 load_dotenv(find_dotenv())
@@ -44,7 +45,7 @@ load_dotenv(find_dotenv())
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", FRONTEND_URL],  # Allow requests from your React app (adjust domain if necessary)
+    allow_origins=[LANGFUSE_HOST, FRONTEND_URL],  # Allow requests from your React app (adjust domain if necessary)
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods (POST, GET, etc.)
     allow_headers=["*"],  # Allow all headers
@@ -54,9 +55,12 @@ app.add_middleware(
 
 class QuestionRequest(BaseModel):
     question: str
+    n_chunks: int
+    collection: str
 
 class SendFilesRequest(BaseModel):
     filename: str
+    collection: str
 
 
 # Define a prompt for the API
@@ -114,11 +118,11 @@ async def upload_to_qdrant(file: SendFilesRequest):
         
         pages = combine_page_contents(file_contents)
 
-        chunks = chunk_pages(pages, 1000, 200) # Adjust as needed
+        chunks = chunk_pages(pages, 1500, 250) # Adjust as needed
 
         images = get_images(file_contents, f"{output_dir}/", app.state.embedding_models["clip"])
         # Send the loaded document chunks and images to Qdrant.
-        success = send_to_qdrant(filename, chunks, images, app.state.embedding_models["txt"])
+        success = send_to_qdrant(filename, chunks, images, app.state.embedding_models["txt"], file.collection)
 
         if success:
             return {"message": "File contents were uploaded to Qdrant successfully."}
@@ -174,17 +178,17 @@ async def ask_question_2(data: QuestionRequest = Body(None)):
     
     try:  
         #response = agents[data['username']](data['input'])
-        # Retrieve the Qdrant vector store (assuming qdrant_client() gives you access to it)
-        txt_store, img_store = qdrant_client(app.state.embedding_models["txt"], app.state.embedding_models["clip"])
 
         # Get the question from the request body
-        #question = question_request.question
         question = data.question
-
+        k = data.n_chunks
+        collection = data.collection
+        # Retrieve the Qdrant vector store (assuming qdrant_client() gives you access to it)
+        txt_store, img_store = qdrant_client(app.state.embedding_models["txt"], app.state.embedding_models["clip"], collection)
 
 
         # Use the question-answer retrieval function to get the response
-        response, images = qa_ret(txt_store, img_store, question)
+        response, images = qa_ret(txt_store, img_store, question, k)
         if images == "":
             data = {'ai_response': response, 'pages': ''}
         else:

@@ -25,6 +25,10 @@ def main():
         st.markdown("- [ABS: Rules for building and classing, Marine vessels, Part 4](https://ww2.eagle.org/content/dam/eagle/rules-and-guides/current/other/1-rules-for-building-and-classing-marine-vessels-2025/1-mvr-part-4-jan25.pdf)")
         st.markdown("- [BV: Rules for the classification of steel ships, Part C](hhttps://erules.veristar.com/dy/data/bv/pdf/467-NR_PartC_2025-01.pdf)")
         st.markdown("- DNV: Rules for classification, Part 4")
+        st.markdown("#### RAG parameters")
+        n_chunks = st.slider("Select number of retrieved chunks", min_value=1, max_value=10, value=4, step=1)
+        collection = st.selectbox("Select the database collection", ["All", "ABS", "BV", "DNV"])
+
     # Initialize chat history in session state if not already defined.
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -49,7 +53,7 @@ def main():
         
         # Set your backend URL. Adjust if your backend is hosted elsewhere.
         backend_url = os.getenv("BACKEND_URL")
-        payload = {"question": prompt}
+        payload = {"question": prompt, "n_chunks": n_chunks, "collection": collection}
         
         try:
             response = requests.post(f"{backend_url}/message", json=payload)
