@@ -35,22 +35,6 @@ QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
 # Function to process PDF and split it into chunks
-def process_pdf(pdf_path):
-    """Process the PDF, split it into chunks, and return the chunks."""
-    print(pdf_path)
-    loader = PyPDFLoader(pdf_path)
-    pages = loader.load()
-    document_text = "".join([page.page_content for page in pages])
-
-    # Split the document into chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,  # Adjust as needed
-        chunk_overlap=200  # Adjust as needed
-    )
-    chunks = text_splitter.create_documents([document_text])
-
-    return chunks
-
 def chunk_pages(pages, chunk_size, overlap):
     """
     Combines page contents, splits the combined text into chunks, includes metadata
