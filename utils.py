@@ -157,10 +157,6 @@ def combine_page_contents(contents):
     
     return pages
 
-def combine_vectors_avg(vec1, vec2):
-    vec1 = np.array(vec1)
-    vec2 = np.array(vec2)
-    return (0.5 * vec1 + 0.5 * vec2)
 
 def get_images(md_contents, local_dir, img_embedding_model):
     
@@ -175,11 +171,8 @@ def get_images(md_contents, local_dir, img_embedding_model):
                 
                 if item.get("img_caption"):
                     caption = item["img_caption"][0]
-                    #txt_embd = img_embedding_model.embed_query(item["img_caption"][0])
-                    #embd = combine_vectors_avg(img_embd[0], txt_embd)
                 else:
                     caption = "This figure doesn't have a caption"
-                    #embd = img_embd[0]
 
                 images.append({"base64": base64_str, 
                             "img_embeddings": img_embd[0],
