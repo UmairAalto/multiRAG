@@ -1,6 +1,6 @@
 # 📄 Multimodal Retrieval-Augmented Generation (RAG)
 
-This project provides a full-stack RAG system with a FastAPI backend and a Streamlit frontend for interactive chat. The backend handles document uploads, processing PDF files, embedding document content into a vector database (Qdrant), and allowing users to ask questions based on the uploaded document. The frontend is a chat interface that also allows users to ask questions based on the uploaded documents and it. The AI model uses OpenAI's embeddings to generate intelligent responses from the document content. 
+This project provides a web application for RAG system with a FastAPI backend and a Streamlit frontend for interactive chat. The backend handles document uploads, processing PDF files, embedding document content into a vector database (Qdrant), and allowing users to ask questions based on the uploaded document. The frontend is a chat interface that also allows users to ask questions based on the uploaded documents and it. The AI model uses OpenAI's embeddings to generate intelligent responses from the document content. 
 
 ### 🛠️ Features
  - **PDF Upload:** Upload PDF files to be processed and stored in a vector database (Qdrant) for querying.
