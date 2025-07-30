@@ -1,11 +1,12 @@
 # 📄 Multimodal Retrieval-Augmented Generation (RAG)
 
-This application serves as the core API for handling document uploads, processing PDF files, embedding document content into a vector database (Qdrant), and allowing users to ask questions based on the uploaded document. The AI model uses OpenAI's embeddings to generate intelligent responses from the document content. 
+This project provides a full-stack RAG system with a FastAPI backend and a Streamlit frontend for interactive chat. The backend handles document uploads, processing PDF files, embedding document content into a vector database (Qdrant), and allowing users to ask questions based on the uploaded document. The frontend is a chat interface that also allows users to ask questions based on the uploaded documents and it. The AI model uses OpenAI's embeddings to generate intelligent responses from the document content. 
 
 ### 🛠️ Features
  - **PDF Upload:** Upload PDF files to be processed and stored in a vector database (Qdrant) for querying.
  - **Question & Answer System:** Users can ask questions based on the content of the uploaded PDF.
  - **API Documentation:** Automatic API documentation available through Swagger at /docs.
+ - **Streamlit Chat Interface:** UI for interactive chat. Users can type questions, select the number of chunks to retrieve, choose a document collection, and view answers directly. The chat interface displays the assistant’s answers along with any retrieved image.
 
 ### 📦 Libraries Used
  - **FastAPI:** For building the web API.
@@ -13,13 +14,21 @@ This application serves as the core API for handling document uploads, processin
  - **LangChain:** For handling PDF processing and embeddings.
  - **OpenAI:** For generating embeddings and AI model responses.
  - **minerU:** For extracting text from PDF files.
+ - **OpenCLIP:** Used for image embedding of figures in PDFs.
+ - **Streamlit:** Web application framework for the chat frontend.
+ - **Requests:** Used in the Streamlit app to communicate with the FastAPI backend.
  - **CORS Middleware:** For handling Cross-Origin Resource Sharing (CORS) to allow frontend requests from different domains.
  - **dotenv:** For managing environment variables (e.g., API keys).
 
 ### 🗂️ Project Structure
  - ```app.py```: Main FastAPI application file containing the API endpoints for PDF upload and question-answer system.
  - ```utils.py```: Contains utility functions for processing PDF files, sending embeddings to the vector DB, and retrieving answers from the embeddings.
- - **Environment Variables:** API keys for OpenAI and Qdrant are managed through environment variables using ```.env``` file.
+ - ```frontend_app.py```: Streamlit application for the chat UI. Contains a sidebar configuration and a chat loop that sends user questions to the backend and displays answers with any images.
+ - ```docker/Dockerfile.frontend```: Docker build instructions for the Streamlit frontend.
+ - ```docker/Dockerfile.backend```: Docker build instructions for the FastAPI backend.
+ - ```requirements.txt```: Python dependencies.
+ - ```output/```**directory**: Stores intermediate results from PDF extraction that can be manually inspected before uploading to database.
+ - **Environment Variables:** API keys for both frontend and backend are managed through environment variables using ```.env``` file.
 
 ## 🚀 Getting Started
 
@@ -51,10 +60,6 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 Install the required dependencies using ```pip```:
 ```
 pip install -r requirements.txt
-```
-If there is no requirements.txt file, manually install these packages:
-```
-pip install fastapi qdrant-client langchain pydantic uvicorn python-dotenv openai
 ```
 
 #### Step 4: Set Up Environment Variables
@@ -89,6 +94,11 @@ LANGFUSE_PUBLIC_KEY=your-langfuse-key
 LANGFUSE_HOST=your-langfuse-hostname
 ```
 
+If you want to skip adding traceability, comment out the following from line 370 in ```utils.py```
+
+```
+config={"callbacks": [langfuse_handler]}
+```
 
 #### Step 5: Run the FastAPI Application
 Start the FastAPI server locally by running the following command:
@@ -104,6 +114,14 @@ Open your browser and navigate to: ```http://127.0.0.1:8000/docs```
 Here you can test both API endpoints directly:
  - ```/upload-pdf/```: Upload a PDF file for processing and storage in Qdrant.
  - ```/ask-question/```: Ask a question based on the uploaded PDF's content.
+
+#### Step 7: Launch Streamlit Chat Frontend
+Once the backend is running and you have uploaded some documents, you can launch the Streamlit interface:
+```
+strealit run frontend_app.py
+```
+This will start the Streamlit server on port 8501 by default. You should see a URL like ```http://localhost:8501``` in the console.
+
 
 ## 📄 API Endpoints
 #### 1. Upload PDF - ```/upload-pdf/``` [POST]
@@ -180,13 +198,29 @@ The ```utils.py``` file contains utility functions that handle core logic for pr
  - Use a scalable deployment method like **Docker** or deploy to a cloud service like **AWS**, **Google Cloud**, or **Heroku**.
  - You can deploy Qdrant as a managed service or host your own instance, depending on your requirements.
 
+## 🐳 Docker Deployment
+You can containerize the entire application for easier deployment. This project provides separate Dockerfiles for the backend and frontend, and you can use the official Qdrant image for the vector database. Below are instructions for running each component with Docker, as well as using Docker Compose.
 
-## QDrant installation
+1. **Build backend image:**
+   ```
+   docker build -t fastapi-backend -f docker/Dockerfile.backend .
+   ```
+2. **Run the backend container:**
+   ```
+   docker run -d --name fastapi-backend -p 8000:8000 fastapi-backend
+   ```
+3. **Build frontend image:**
+   ```
+   docker build -t streamlit-frontend -f docker/Dockerfile.frontend .
+   ```
+4. **Run the frontend container:**
+   ```
+   docker run -d --name streamlit-frontend -p 8501:8501 streamlit-frontend
+   ```
+## Docker Compose Deployment
+You can run both containers using docker compose. Ref. compose.yml file for implementation.
+Run the command below to get both container running as docker-compose.
 
-Installation:
-sudo docker pull qdrant/qdrant
-
-Running the container:
-sudo docker run -p 6333:6333 \
-    -v /home/marcec/qdrant/data:/qdrant/storage \
-    qdrant/qdrant
+```bash
+sudo docker compose watch
+```
