@@ -1,6 +1,6 @@
-# 📄 Document GPT - FastAPI Backend
+# 📄 Multimodal Retrieval-Augmented Generation (RAG)
 
-This FastAPI backend serves as the core API for handling document uploads, processing PDF files, embedding document content into a vector database (Qdrant), and allowing users to ask questions based on the uploaded document. The AI model uses OpenAI's embeddings to generate intelligent responses from the document content.
+This application serves as the core API for handling document uploads, processing PDF files, embedding document content into a vector database (Qdrant), and allowing users to ask questions based on the uploaded document. The AI model uses OpenAI's embeddings to generate intelligent responses from the document content. 
 
 ### 🛠️ Features
  - **PDF Upload:** Upload PDF files to be processed and stored in a vector database (Qdrant) for querying.
@@ -12,7 +12,7 @@ This FastAPI backend serves as the core API for handling document uploads, proce
  - **Qdrant Client:** For storing and retrieving document embeddings.
  - **LangChain:** For handling PDF processing and embeddings.
  - **OpenAI:** For generating embeddings and AI model responses.
- - **PyPDFLoader:** For extracting text from PDF files.
+ - **minerU:** For extracting text from PDF files.
  - **CORS Middleware:** For handling Cross-Origin Resource Sharing (CORS) to allow frontend requests from different domains.
  - **dotenv:** For managing environment variables (e.g., API keys).
 
@@ -25,7 +25,7 @@ This FastAPI backend serves as the core API for handling document uploads, proce
 
 ### Prerequisites
 Before setting up the FastAPI backend, ensure you have the following installed:
- - Python 3.7+
+ - Python 3.10-3.13
  - Pip (Python package manager)
  - Qdrant (a vector database, can be run locally or via a managed service)
  - OpenAI API Key (for generating embeddings and responses)
