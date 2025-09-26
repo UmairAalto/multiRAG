@@ -30,7 +30,7 @@ services:
     ports:
       - "6333:6333"
     volumes:
-      - C:\Users\muhammu1\qdrant\data:/qdrant/storage
+      - C:\Users\umairm\qdrant\data:/qdrant/storage
 
   langfuse-server:
     image: langfuse/langfuse:2

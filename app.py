@@ -12,7 +12,7 @@ from dotenv import load_dotenv, find_dotenv
 import json
 
 # Import the necessary functions from utils.py
-from utils import process_pdf, send_to_qdrant, qdrant_client, qa_ret, combine_page_contents, get_embedding_models, process_pdf_with_tables, chunk_pages, get_images
+from utils import send_to_qdrant, qdrant_client, qa_ret, combine_page_contents, get_embedding_models, process_pdf_with_tables, chunk_pages, get_images, overlap_text_splitter
 
 
 # Configure logging
@@ -116,9 +116,11 @@ async def upload_to_qdrant(file: SendFilesRequest):
         with open(f"output/{filename}_content_list.json", "r", encoding="utf-8") as json_list:
             file_contents = json.load(json_list)
         
-        pages = combine_page_contents(file_contents)
+        #pages = combine_page_contents(file_contents)
 
-        chunks = chunk_pages(pages, 1500, 250) # Adjust as needed
+        #chunks = chunk_pages(pages, 1500, 250) # Adjust as needed
+
+        chunks = overlap_text_splitter(file_contents, 1500, 250) # Adjust as needed
 
         images = get_images(file_contents, f"{output_dir}/", app.state.embedding_models["clip"])
         # Send the loaded document chunks and images to Qdrant.
