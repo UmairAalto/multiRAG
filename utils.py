@@ -271,7 +271,7 @@ def get_images(md_contents, local_dir, img_embedding_model):
 
                 images.append({"base64": base64_str, 
                             "img_embeddings": img_embd[0],
-                            "page_num": item["page_idx"] + 1,
+                            "page_num": f"{item["page_idx"] + 1}",
                             "image_caption": caption})
     return images
 
@@ -307,7 +307,7 @@ def do_parse(
         for idx, model_list in enumerate(infer_results):
             model_json = copy.deepcopy(model_list)
             pdf_file_name = pdf_file_names[idx]
-            local_image_dir, local_md_dir = prepare_env(output_dir, pdf_file_name)
+            local_image_dir, local_md_dir = f"output/{pdf_file_name}_images", "output"
             image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(local_md_dir)
 
             images_list = all_image_lists[idx]
